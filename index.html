@@ -108,3 +108,909 @@
 </body>
 </html>
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nebula Drift - Tactical Skyship</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            --hud-bg: rgba(10, 14, 24, 0.82);
+            --hud-border: rgba(120, 182, 255, 0.35);
+            --hud-glow: rgba(120, 182, 255, 0.6);
+            --accent: #7fd7ff;
+            --accent-strong: #8ff2ff;
+            --danger: #ff7a7a;
+            --success: #88ffb7;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            background: radial-gradient(circle at top, #0b1a34 0%, #03060e 55%, #020409 100%);
+            color: #f5f9ff;
+            overflow: hidden;
+        }
+
+        #game-shell {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: grid;
+            place-items: center;
+        }
+
+        canvas#game {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .hud {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            display: grid;
+            grid-template-columns: 1fr minmax(280px, 360px);
+            grid-template-rows: auto 1fr auto;
+            gap: 16px;
+            padding: 18px 24px 22px;
+        }
+
+        .panel {
+            background: var(--hud-bg);
+            border: 1px solid var(--hud-border);
+            border-radius: 16px;
+            padding: 14px 16px;
+            box-shadow: 0 0 24px rgba(10, 20, 40, 0.5), inset 0 0 30px rgba(20, 40, 80, 0.35);
+            backdrop-filter: blur(8px);
+        }
+
+        .panel h3 {
+            margin: 0 0 8px;
+            font-size: 12px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--accent-strong);
+        }
+
+        .top-bar {
+            grid-column: 1 / -1;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .status-bar {
+            flex: 1;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .stat {
+            flex: 1;
+        }
+
+        .stat label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            opacity: 0.7;
+            margin-bottom: 4px;
+        }
+
+        .meter {
+            height: 8px;
+            border-radius: 99px;
+            background: rgba(255, 255, 255, 0.08);
+            overflow: hidden;
+        }
+
+        .meter span {
+            display: block;
+            height: 100%;
+            border-radius: 99px;
+            transition: width 0.2s ease-out;
+        }
+
+        .meter.health span {
+            background: linear-gradient(90deg, #ff7a7a, #ffd1d1);
+        }
+
+        .meter.shield span {
+            background: linear-gradient(90deg, #6bdcff, #a3f3ff);
+        }
+
+        .meter.energy span {
+            background: linear-gradient(90deg, #7bf5c9, #e0ff8a);
+        }
+
+        .mission {
+            width: 320px;
+        }
+
+        .mission p {
+            margin: 0;
+            font-size: 13px;
+            line-height: 1.4;
+            color: #d3e6ff;
+        }
+
+        .left-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .inventory {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+
+        .inventory .item {
+            border-radius: 10px;
+            border: 1px solid rgba(127, 215, 255, 0.4);
+            padding: 8px;
+            font-size: 11px;
+            background: rgba(15, 25, 45, 0.6);
+        }
+
+        .inventory .item span {
+            display: block;
+            font-size: 14px;
+            color: var(--accent-strong);
+        }
+
+        .log {
+            max-height: 160px;
+            overflow: hidden;
+        }
+
+        .log ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: grid;
+            gap: 6px;
+            font-size: 12px;
+            color: #c6d6f1;
+        }
+
+        .log li strong {
+            color: var(--success);
+        }
+
+        .right-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            align-items: stretch;
+        }
+
+        .mini-map {
+            display: grid;
+            gap: 8px;
+        }
+
+        #minimap {
+            width: 100%;
+            height: 160px;
+            border-radius: 12px;
+            border: 1px solid rgba(127, 215, 255, 0.35);
+            background: rgba(8, 12, 22, 0.8);
+        }
+
+        .controls {
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        .controls strong {
+            color: var(--accent-strong);
+        }
+
+        .action-bar {
+            grid-column: 1 / -1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .action-bar .combo {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            font-size: 12px;
+        }
+
+        .action-pill {
+            padding: 6px 12px;
+            border-radius: 999px;
+            border: 1px solid rgba(127, 215, 255, 0.4);
+            background: rgba(10, 20, 40, 0.7);
+            box-shadow: inset 0 0 12px rgba(127, 215, 255, 0.2);
+        }
+
+        .action-pill strong {
+            color: var(--accent-strong);
+        }
+
+        .notification {
+            position: absolute;
+            left: 50%;
+            top: 14%;
+            transform: translateX(-50%);
+            background: rgba(15, 25, 45, 0.7);
+            border: 1px solid rgba(127, 215, 255, 0.5);
+            border-radius: 14px;
+            padding: 12px 18px;
+            font-size: 13px;
+            box-shadow: 0 0 24px rgba(127, 215, 255, 0.2);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+
+        .notification.show {
+            opacity: 1;
+        }
+
+        @media (max-width: 900px) {
+            .hud {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto auto 1fr auto;
+            }
+
+            .mission {
+                width: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="game-shell">
+        <canvas id="game"></canvas>
+        <div class="hud">
+            <div class="top-bar">
+                <div class="panel status-bar">
+                    <div class="stat">
+                        <label>HULL <span id="healthText">100%</span></label>
+                        <div class="meter health"><span id="healthBar"></span></div>
+                    </div>
+                    <div class="stat">
+                        <label>SHIELD <span id="shieldText">100%</span></label>
+                        <div class="meter shield"><span id="shieldBar"></span></div>
+                    </div>
+                    <div class="stat">
+                        <label>ENERGY <span id="energyText">100%</span></label>
+                        <div class="meter energy"><span id="energyBar"></span></div>
+                    </div>
+                </div>
+                <div class="panel mission">
+                    <h3>Primary Contract</h3>
+                    <p id="missionText">Secure the Rift Gate, collect 6 relic cores, and survive the next anomaly wave.</p>
+                </div>
+            </div>
+
+            <div class="left-stack">
+                <div class="panel inventory">
+                    <div class="item"><span id="relicCount">0</span>Relic Cores</div>
+                    <div class="item"><span id="droneCount">3</span>Escort Drones</div>
+                    <div class="item"><span id="intelCount">0</span>Signal Intel</div>
+                </div>
+                <div class="panel log">
+                    <h3>Combat Log</h3>
+                    <ul id="logList"></ul>
+                </div>
+            </div>
+
+            <div class="right-stack">
+                <div class="panel mini-map">
+                    <h3>Sector Map</h3>
+                    <canvas id="minimap" width="300" height="160"></canvas>
+                </div>
+                <div class="panel controls">
+                    <h3>Helm Controls</h3>
+                    <div><strong>WASD</strong> / Arrow Keys — Thrust</div>
+                    <div><strong>Shift</strong> — Afterburner</div>
+                    <div><strong>Mouse</strong> — Aim</div>
+                    <div><strong>Left Click</strong> — Pulse Cannons</div>
+                    <div><strong>Space</strong> — Rift Dash</div>
+                    <div><strong>R</strong> — Recall Drones</div>
+                </div>
+            </div>
+
+            <div class="action-bar">
+                <div class="combo">
+                    <div class="action-pill">Level <strong id="levelText">1</strong></div>
+                    <div class="action-pill">XP <strong id="xpText">0%</strong></div>
+                    <div class="action-pill">Anomaly Wave <strong id="waveText">1</strong></div>
+                </div>
+                <div class="combo">
+                    <div class="action-pill">Threats Nearby: <strong id="threatText">0</strong></div>
+                    <div class="action-pill">Sector Integrity: <strong id="sectorText">100%</strong></div>
+                </div>
+            </div>
+        </div>
+        <div class="notification" id="notification"></div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("game");
+        const ctx = canvas.getContext("2d");
+        const minimap = document.getElementById("minimap");
+        const mapCtx = minimap.getContext("2d");
+        const notification = document.getElementById("notification");
+
+        const healthBar = document.getElementById("healthBar");
+        const shieldBar = document.getElementById("shieldBar");
+        const energyBar = document.getElementById("energyBar");
+        const healthText = document.getElementById("healthText");
+        const shieldText = document.getElementById("shieldText");
+        const energyText = document.getElementById("energyText");
+        const relicCount = document.getElementById("relicCount");
+        const droneCount = document.getElementById("droneCount");
+        const intelCount = document.getElementById("intelCount");
+        const logList = document.getElementById("logList");
+        const missionText = document.getElementById("missionText");
+        const levelText = document.getElementById("levelText");
+        const xpText = document.getElementById("xpText");
+        const waveText = document.getElementById("waveText");
+        const threatText = document.getElementById("threatText");
+        const sectorText = document.getElementById("sectorText");
+
+        const state = {
+            width: window.innerWidth,
+            height: window.innerHeight,
+            lastTime: 0,
+            keys: {},
+            mouse: { x: 0, y: 0, down: false },
+            camera: { x: 0, y: 0 },
+            particles: [],
+            projectiles: [],
+            enemies: [],
+            asteroids: [],
+            pickups: [],
+            log: [],
+            waves: 1,
+            threat: 0,
+            sectorIntegrity: 100,
+            relics: 0,
+            intel: 0,
+            drones: 3,
+            player: {
+                x: 0,
+                y: 0,
+                vx: 0,
+                vy: 0,
+                radius: 18,
+                health: 100,
+                shield: 100,
+                energy: 100,
+                level: 1,
+                xp: 0,
+                dashCooldown: 0,
+            },
+        };
+
+        const world = {
+            width: 3200,
+            height: 2400,
+        };
+
+        function resize() {
+            state.width = window.innerWidth;
+            state.height = window.innerHeight;
+            canvas.width = state.width;
+            canvas.height = state.height;
+        }
+
+        resize();
+        window.addEventListener("resize", resize);
+
+        const starfield = Array.from({ length: 320 }).map(() => ({
+            x: Math.random() * world.width,
+            y: Math.random() * world.height,
+            size: Math.random() * 2 + 0.5,
+            alpha: Math.random() * 0.6 + 0.2,
+        }));
+
+        function addLog(message, highlight = false) {
+            const entry = { message, highlight, id: Date.now() + Math.random() };
+            state.log.unshift(entry);
+            state.log = state.log.slice(0, 6);
+            logList.innerHTML = state.log.map(item =>
+                `<li>${item.highlight ? "<strong>" : ""}${item.message}${item.highlight ? "</strong>" : ""}</li>`
+            ).join("");
+        }
+
+        function showNotification(text) {
+            notification.textContent = text;
+            notification.classList.add("show");
+            setTimeout(() => notification.classList.remove("show"), 1800);
+        }
+
+        function spawnEnemy() {
+            const edge = Math.floor(Math.random() * 4);
+            const padding = 180;
+            let x = 0;
+            let y = 0;
+            if (edge === 0) { x = -padding; y = Math.random() * world.height; }
+            if (edge === 1) { x = world.width + padding; y = Math.random() * world.height; }
+            if (edge === 2) { x = Math.random() * world.width; y = -padding; }
+            if (edge === 3) { x = Math.random() * world.width; y = world.height + padding; }
+            state.enemies.push({
+                x, y, radius: 16 + Math.random() * 8,
+                health: 50 + Math.random() * 30,
+                speed: 45 + Math.random() * 30,
+                pulse: Math.random() * Math.PI * 2,
+            });
+        }
+
+        function spawnAsteroid() {
+            state.asteroids.push({
+                x: Math.random() * world.width,
+                y: Math.random() * world.height,
+                radius: 18 + Math.random() * 24,
+                drift: (Math.random() - 0.5) * 12,
+                rotation: Math.random() * Math.PI,
+            });
+        }
+
+        for (let i = 0; i < 16; i += 1) spawnAsteroid();
+        for (let i = 0; i < 6; i += 1) spawnEnemy();
+
+        function spawnPickup(x, y, type) {
+            state.pickups.push({
+                x,
+                y,
+                type,
+                radius: 10,
+                life: 10,
+            });
+        }
+
+        function fireProjectile() {
+            if (state.player.energy < 8) return;
+            state.player.energy -= 4;
+            const angle = Math.atan2(state.mouse.y - state.height / 2, state.mouse.x - state.width / 2);
+            state.projectiles.push({
+                x: state.player.x,
+                y: state.player.y,
+                vx: Math.cos(angle) * 720,
+                vy: Math.sin(angle) * 720,
+                life: 1.4,
+            });
+        }
+
+        function dash() {
+            if (state.player.dashCooldown > 0 || state.player.energy < 35) return;
+            const angle = Math.atan2(state.mouse.y - state.height / 2, state.mouse.x - state.width / 2);
+            state.player.vx += Math.cos(angle) * 620;
+            state.player.vy += Math.sin(angle) * 620;
+            state.player.energy -= 30;
+            state.player.dashCooldown = 4;
+            addLog("Rift dash engaged", true);
+            showNotification("Rift dash!");
+        }
+
+        function recallDrones() {
+            state.player.shield = Math.min(100, state.player.shield + 25);
+            state.drones = Math.max(0, state.drones - 1);
+            addLog("Drone diverted to reinforcement bay");
+            showNotification("Drone recall boost");
+        }
+
+        window.addEventListener("keydown", (event) => {
+            state.keys[event.key.toLowerCase()] = true;
+            if (event.key === " " ) dash();
+            if (event.key.toLowerCase() === "r" && state.drones > 0) recallDrones();
+        });
+
+        window.addEventListener("keyup", (event) => {
+            state.keys[event.key.toLowerCase()] = false;
+        });
+
+        window.addEventListener("mousemove", (event) => {
+            state.mouse.x = event.clientX;
+            state.mouse.y = event.clientY;
+        });
+
+        window.addEventListener("mousedown", () => {
+            state.mouse.down = true;
+        });
+
+        window.addEventListener("mouseup", () => {
+            state.mouse.down = false;
+        });
+
+        function updatePlayer(dt) {
+            const player = state.player;
+            const acceleration = state.keys.shift ? 220 : 150;
+            const drag = state.keys.shift ? 0.86 : 0.9;
+            if (state.keys.w || state.keys.arrowup) player.vy -= acceleration * dt;
+            if (state.keys.s || state.keys.arrowdown) player.vy += acceleration * dt;
+            if (state.keys.a || state.keys.arrowleft) player.vx -= acceleration * dt;
+            if (state.keys.d || state.keys.arrowright) player.vx += acceleration * dt;
+
+            player.vx *= drag;
+            player.vy *= drag;
+
+            player.x = Math.max(0, Math.min(world.width, player.x + player.vx * dt));
+            player.y = Math.max(0, Math.min(world.height, player.y + player.vy * dt));
+
+            player.energy = Math.min(100, player.energy + 12 * dt);
+            if (player.shield < 100) player.shield = Math.min(100, player.shield + 5 * dt);
+            if (player.dashCooldown > 0) player.dashCooldown -= dt;
+
+            if (state.mouse.down) fireProjectile();
+        }
+
+        function updateEnemies(dt) {
+            state.enemies.forEach((enemy) => {
+                const dx = state.player.x - enemy.x;
+                const dy = state.player.y - enemy.y;
+                const dist = Math.hypot(dx, dy) || 1;
+                enemy.x += (dx / dist) * enemy.speed * dt;
+                enemy.y += (dy / dist) * enemy.speed * dt;
+                enemy.pulse += dt * 3;
+            });
+        }
+
+        function updateProjectiles(dt) {
+            state.projectiles = state.projectiles.filter((bolt) => {
+                bolt.x += bolt.vx * dt;
+                bolt.y += bolt.vy * dt;
+                bolt.life -= dt;
+                return bolt.life > 0;
+            });
+        }
+
+        function updatePickups(dt) {
+            state.pickups = state.pickups.filter((pickup) => {
+                pickup.life -= dt;
+                const dx = state.player.x - pickup.x;
+                const dy = state.player.y - pickup.y;
+                if (Math.hypot(dx, dy) < 30) {
+                    if (pickup.type === "relic") {
+                        state.relics += 1;
+                        state.player.xp += 18;
+                        addLog("Relic core secured", true);
+                        showNotification("Relic core collected");
+                    } else {
+                        state.intel += 1;
+                        state.player.xp += 10;
+                        addLog("Signal intel acquired");
+                    }
+                    return false;
+                }
+                return pickup.life > 0;
+            });
+        }
+
+        function resolveCollisions() {
+            state.projectiles.forEach((bolt) => {
+                state.enemies.forEach((enemy) => {
+                    const dx = bolt.x - enemy.x;
+                    const dy = bolt.y - enemy.y;
+                    if (Math.hypot(dx, dy) < enemy.radius + 6) {
+                        enemy.health -= 30;
+                        bolt.life = 0;
+                        for (let i = 0; i < 10; i += 1) {
+                            state.particles.push({
+                                x: enemy.x,
+                                y: enemy.y,
+                                vx: (Math.random() - 0.5) * 120,
+                                vy: (Math.random() - 0.5) * 120,
+                                life: 0.6,
+                            });
+                        }
+                    }
+                });
+            });
+
+            state.enemies = state.enemies.filter((enemy) => {
+                if (enemy.health <= 0) {
+                    state.player.xp += 22;
+                    state.sectorIntegrity = Math.min(100, state.sectorIntegrity + 1);
+                    if (Math.random() < 0.45) spawnPickup(enemy.x, enemy.y, "relic");
+                    if (Math.random() < 0.4) spawnPickup(enemy.x, enemy.y, "intel");
+                    addLog("Enemy skirmisher down", true);
+                    return false;
+                }
+                return true;
+            });
+
+            state.enemies.forEach((enemy) => {
+                const dx = state.player.x - enemy.x;
+                const dy = state.player.y - enemy.y;
+                if (Math.hypot(dx, dy) < enemy.radius + state.player.radius) {
+                    if (state.player.shield > 0) {
+                        state.player.shield = Math.max(0, state.player.shield - 25);
+                    } else {
+                        state.player.health = Math.max(0, state.player.health - 20);
+                    }
+                    enemy.x += (Math.random() - 0.5) * 120;
+                    enemy.y += (Math.random() - 0.5) * 120;
+                    state.sectorIntegrity = Math.max(0, state.sectorIntegrity - 3);
+                    addLog("Hull impact detected", true);
+                }
+            });
+        }
+
+        function updateProgress() {
+            const player = state.player;
+            if (player.xp >= 100) {
+                player.level += 1;
+                player.xp = 0;
+                player.health = Math.min(100, player.health + 20);
+                player.shield = Math.min(100, player.shield + 30);
+                addLog(`Level ${player.level} unlocked`, true);
+                showNotification("Level up!");
+            }
+
+            if (state.relics >= 6) {
+                missionText.textContent = "Rift Gate stabilized! Escort the convoy through the anomaly storm.";
+            } else {
+                missionText.textContent = "Secure the Rift Gate, collect 6 relic cores, and survive the next anomaly wave.";
+            }
+        }
+
+        function updateHUD() {
+            healthBar.style.width = `${state.player.health}%`;
+            shieldBar.style.width = `${state.player.shield}%`;
+            energyBar.style.width = `${state.player.energy}%`;
+            healthText.textContent = `${Math.round(state.player.health)}%`;
+            shieldText.textContent = `${Math.round(state.player.shield)}%`;
+            energyText.textContent = `${Math.round(state.player.energy)}%`;
+            relicCount.textContent = state.relics;
+            intelCount.textContent = state.intel;
+            droneCount.textContent = state.drones;
+            levelText.textContent = state.player.level;
+            xpText.textContent = `${Math.round(state.player.xp)}%`;
+            waveText.textContent = state.waves;
+            threatText.textContent = state.enemies.length;
+            sectorText.textContent = `${Math.round(state.sectorIntegrity)}%`;
+        }
+
+        function updateParticles(dt) {
+            state.particles = state.particles.filter((particle) => {
+                particle.x += particle.vx * dt;
+                particle.y += particle.vy * dt;
+                particle.life -= dt;
+                return particle.life > 0;
+            });
+        }
+
+        function updateAsteroids(dt) {
+            state.asteroids.forEach((rock) => {
+                rock.rotation += rock.drift * dt * 0.2;
+            });
+        }
+
+        function updateWave(dt) {
+            if (state.enemies.length < 4 + state.waves) {
+                if (Math.random() < dt * 0.6) spawnEnemy();
+            }
+            if (state.sectorIntegrity <= 0 || state.player.health <= 0) {
+                addLog("Ship systems failing. Emergency retreat!", true);
+                showNotification("Mission failed: retreat");
+                state.player.health = 100;
+                state.player.shield = 100;
+                state.sectorIntegrity = 100;
+                state.relics = 0;
+                state.enemies.length = 0;
+                for (let i = 0; i < 5; i += 1) spawnEnemy();
+            }
+            state.threat = state.enemies.length;
+        }
+
+        function drawStarfield() {
+            ctx.save();
+            ctx.fillStyle = "#050915";
+            ctx.fillRect(0, 0, state.width, state.height);
+            ctx.translate(-state.camera.x * 0.2, -state.camera.y * 0.2);
+            starfield.forEach((star) => {
+                ctx.fillStyle = `rgba(160, 200, 255, ${star.alpha})`;
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.restore();
+        }
+
+        function drawNebula() {
+            const gradient = ctx.createRadialGradient(
+                state.width * 0.6,
+                state.height * 0.3,
+                80,
+                state.width * 0.5,
+                state.height * 0.4,
+                500
+            );
+            gradient.addColorStop(0, "rgba(88, 150, 255, 0.25)");
+            gradient.addColorStop(0.6, "rgba(30, 60, 120, 0.05)");
+            gradient.addColorStop(1, "rgba(5, 10, 20, 0)");
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, state.width, state.height);
+        }
+
+        function drawAsteroids() {
+            ctx.save();
+            ctx.translate(-state.camera.x, -state.camera.y);
+            state.asteroids.forEach((rock) => {
+                ctx.save();
+                ctx.translate(rock.x, rock.y);
+                ctx.rotate(rock.rotation);
+                ctx.fillStyle = "rgba(90, 110, 140, 0.8)";
+                ctx.beginPath();
+                ctx.ellipse(0, 0, rock.radius, rock.radius * 0.8, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = "rgba(150, 180, 200, 0.4)";
+                ctx.stroke();
+                ctx.restore();
+            });
+            ctx.restore();
+        }
+
+        function drawPlayer() {
+            const player = state.player;
+            ctx.save();
+            ctx.translate(state.width / 2, state.height / 2);
+            const angle = Math.atan2(state.mouse.y - state.height / 2, state.mouse.x - state.width / 2);
+            ctx.rotate(angle + Math.PI / 2);
+            ctx.fillStyle = "rgba(130, 220, 255, 0.9)";
+            ctx.beginPath();
+            ctx.moveTo(0, -24);
+            ctx.lineTo(18, 18);
+            ctx.lineTo(0, 10);
+            ctx.lineTo(-18, 18);
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = "rgba(190, 250, 255, 0.8)";
+            ctx.stroke();
+
+            ctx.fillStyle = "rgba(80, 200, 255, 0.6)";
+            ctx.beginPath();
+            ctx.arc(0, -4, 6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
+            if (player.shield > 0) {
+                ctx.save();
+                ctx.translate(state.width / 2, state.height / 2);
+                ctx.strokeStyle = `rgba(120, 210, 255, ${0.2 + player.shield / 140})`;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(0, 0, player.radius + 12, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+
+        function drawProjectiles() {
+            ctx.save();
+            ctx.translate(-state.camera.x, -state.camera.y);
+            ctx.strokeStyle = "rgba(160, 255, 255, 0.9)";
+            ctx.lineWidth = 2;
+            state.projectiles.forEach((bolt) => {
+                ctx.beginPath();
+                ctx.moveTo(bolt.x - bolt.vx * 0.02, bolt.y - bolt.vy * 0.02);
+                ctx.lineTo(bolt.x, bolt.y);
+                ctx.stroke();
+            });
+            ctx.restore();
+        }
+
+        function drawEnemies() {
+            ctx.save();
+            ctx.translate(-state.camera.x, -state.camera.y);
+            state.enemies.forEach((enemy) => {
+                ctx.fillStyle = "rgba(255, 120, 120, 0.85)";
+                ctx.beginPath();
+                ctx.arc(enemy.x, enemy.y, enemy.radius + Math.sin(enemy.pulse) * 2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = "rgba(255, 200, 200, 0.8)";
+                ctx.stroke();
+            });
+            ctx.restore();
+        }
+
+        function drawParticles() {
+            ctx.save();
+            ctx.translate(-state.camera.x, -state.camera.y);
+            state.particles.forEach((particle) => {
+                ctx.fillStyle = `rgba(180, 240, 255, ${particle.life})`;
+                ctx.beginPath();
+                ctx.arc(particle.x, particle.y, 3, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.restore();
+        }
+
+        function drawPickups() {
+            ctx.save();
+            ctx.translate(-state.camera.x, -state.camera.y);
+            state.pickups.forEach((pickup) => {
+                ctx.fillStyle = pickup.type === "relic" ? "rgba(120, 255, 200, 0.9)" : "rgba(120, 180, 255, 0.9)";
+                ctx.beginPath();
+                ctx.arc(pickup.x, pickup.y, pickup.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.restore();
+        }
+
+        function drawMinimap() {
+            mapCtx.clearRect(0, 0, minimap.width, minimap.height);
+            mapCtx.fillStyle = "rgba(10, 20, 40, 0.9)";
+            mapCtx.fillRect(0, 0, minimap.width, minimap.height);
+
+            const scaleX = minimap.width / world.width;
+            const scaleY = minimap.height / world.height;
+
+            mapCtx.fillStyle = "rgba(120, 220, 255, 0.9)";
+            mapCtx.beginPath();
+            mapCtx.arc(state.player.x * scaleX, state.player.y * scaleY, 4, 0, Math.PI * 2);
+            mapCtx.fill();
+
+            mapCtx.fillStyle = "rgba(255, 120, 120, 0.9)";
+            state.enemies.forEach((enemy) => {
+                mapCtx.fillRect(enemy.x * scaleX - 1, enemy.y * scaleY - 1, 3, 3);
+            });
+
+            mapCtx.fillStyle = "rgba(120, 255, 200, 0.9)";
+            state.pickups.forEach((pickup) => {
+                mapCtx.fillRect(pickup.x * scaleX, pickup.y * scaleY, 2, 2);
+            });
+        }
+
+        function loop(timestamp) {
+            const dt = Math.min(0.04, (timestamp - state.lastTime) / 1000 || 0);
+            state.lastTime = timestamp;
+
+            updatePlayer(dt);
+            updateEnemies(dt);
+            updateProjectiles(dt);
+            updatePickups(dt);
+            updateParticles(dt);
+            updateAsteroids(dt);
+            updateWave(dt);
+            resolveCollisions();
+            updateProgress();
+            updateHUD();
+
+            state.camera.x = state.player.x - state.width / 2;
+            state.camera.y = state.player.y - state.height / 2;
+            state.camera.x = Math.max(0, Math.min(world.width - state.width, state.camera.x));
+            state.camera.y = Math.max(0, Math.min(world.height - state.height, state.camera.y));
+
+            drawStarfield();
+            drawNebula();
+            drawAsteroids();
+            drawPickups();
+            drawProjectiles();
+            drawEnemies();
+            drawParticles();
+            drawPlayer();
+            drawMinimap();
+
+            requestAnimationFrame(loop);
+        }
+
+        addLog("Rift Gate jump successful", true);
+        addLog("Drones synced to tactical grid");
+        addLog("Anomaly signature rising");
+        showNotification("Welcome, Commander");
+
+        requestAnimationFrame(loop);
+    </script>
+</body>
+</html>
